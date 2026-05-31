@@ -74,7 +74,35 @@ const mentorAgent = new Agent({
   model: modelName,
 });
 
-app.post("/api/chat", async (req, res) => {
+// Middleware to validate request access (Origin referer check or Gate Key)
+const checkAccess = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const gateKey = process.env.GATE_KEY;
+  const allowedReferer = process.env.ALLOWED_REFERER || "https://lensetek.online";
+  
+  // If neither GATE_KEY nor ALLOWED_REFERER is configured in env, allow all access (development mode)
+  if (!gateKey && !process.env.ALLOWED_REFERER) {
+    return next();
+  }
+
+  // 1. Check if request comes from the allowed platform domain
+  const referer = req.headers.referer || "";
+  if (process.env.ALLOWED_REFERER && referer.startsWith(allowedReferer)) {
+    return next();
+  }
+
+  // 2. Check if a valid gate key is provided in body, headers, or query
+  const clientKey = req.body.code || req.headers["x-gate-key"] || req.query.code;
+  if (gateKey && clientKey === gateKey) {
+    return next();
+  }
+
+  // If both checks fail, block request
+  return res.status(403).json({ 
+    error: "Access Denied. This simulator is only accessible through the Lensetek Online certification course platform or with a valid access key." 
+  });
+};
+
+app.post("/api/chat", checkAccess, async (req, res) => {
   try {
     const { history, message } = req.body;
     
@@ -105,7 +133,7 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-app.post("/api/analyze", async (req, res) => {
+app.post("/api/analyze", checkAccess, async (req, res) => {
   try {
     const { history, type } = req.body;
     

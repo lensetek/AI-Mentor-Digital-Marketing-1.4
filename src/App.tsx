@@ -115,6 +115,7 @@ export default function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [modalContent, setModalContent] = useState<{ type: 'summary' | 'mindmap', text: string } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [gateCode, setGateCode] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -129,10 +130,14 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const modId = params.get('module') || params.get('m');
+    const code = params.get('code') || params.get('key') || '';
+    if (code) {
+      setGateCode(code);
+    }
     if (modId) {
       const foundModule = MODULES.find(m => m.id.toLowerCase() === modId.toLowerCase());
       if (foundModule) {
-        startModule(foundModule);
+        startModule(foundModule, code);
       }
     }
   }, []);
@@ -159,7 +164,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           history: messages.map(m => ({ role: m.role, text: m.text })),
-          type: type
+          type: type,
+          code: gateCode
         }),
       });
 
@@ -183,7 +189,7 @@ export default function App() {
     }
   };
 
-  const startModule = async (mod: ModuleInfo) => {
+  const startModule = async (mod: ModuleInfo, overrideCode?: string) => {
     setSelectedModule(mod);
     setMessages([]);
     
@@ -201,6 +207,7 @@ export default function App() {
         body: JSON.stringify({
           history: [],
           message: initialText,
+          code: overrideCode || gateCode
         }),
       });
       
@@ -243,6 +250,7 @@ export default function App() {
         body: JSON.stringify({
           history: currentHistory.map(m => ({ role: m.role, text: m.text })),
           message: userMsg.text,
+          code: gateCode
         }),
       });
 
