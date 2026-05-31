@@ -1,0 +1,6 @@
+{
+  "name": "Lensetek AI Mentor",
+  "description": "Virtual Mentor & Lab Simulator for AI-Driven Digital Marketing Certification",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
