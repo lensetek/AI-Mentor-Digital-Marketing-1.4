@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Send, Bot, User, ChevronLeft, Loader2, Sparkles, BookOpen, Link } from 'lucide-react';
+import { Send, Bot, User, ChevronLeft, Loader2, Sparkles, BookOpen, Link, FileText, Brain, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChatMessage } from './types';
 import { MODULES, ModuleInfo } from './data';
@@ -21,6 +21,8 @@ export default function App() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [modalContent, setModalContent] = useState<{ type: 'summary' | 'mindmap', text: string } | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -53,6 +55,42 @@ export default function App() {
     });
   };
 
+  const handleAnalyze = async (type: 'summary' | 'mindmap') => {
+    if (messages.length === 0) {
+      alert("No chat history to analyze. Please start a conversation with the mentor first!");
+      return;
+    }
+    setIsAnalyzing(true);
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          history: messages.map(m => ({ role: m.role, text: m.text })),
+          type: type
+        }),
+      });
+
+      const responseText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (err) {
+        throw new Error(`Server returned non-JSON: ${responseText || response.statusText}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal menganalisis obrolan');
+      }
+
+      setModalContent({ type, text: data.text });
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const startModule = async (mod: ModuleInfo) => {
     setSelectedModule(mod);
     setMessages([]);
@@ -74,7 +112,13 @@ export default function App() {
         }),
       });
       
-      const data = await response.json();
+      const responseText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (err) {
+        throw new Error(`Server returned non-JSON: ${responseText || response.statusText}`);
+      }
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to communicate with mentor');
@@ -110,7 +154,13 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (err) {
+        throw new Error(`Server returned non-JSON: ${responseText || response.statusText}`);
+      }
       
       if (!response.ok) {
         throw new Error(data.error || 'Something went wrong');
@@ -146,10 +196,10 @@ export default function App() {
 
         <main className="flex-1 w-full max-w-4xl mx-auto p-6 md:p-8">
           <div className="mb-10 text-center max-w-2xl mx-auto mt-8 md:mt-12">
-            <h2 className="text-3xl font-bold text-slate-800 mb-4 tracking-tight">Katalog Modul Sertifikasi</h2>
+            <h2 className="text-3xl font-bold text-slate-800 mb-4 tracking-tight">Certification Module Catalog</h2>
             <p className="text-slate-600 text-base leading-relaxed">
-              Selamat datang di simulator praktik "AI-Driven Digital Marketing Certification 1.4".
-              Pilih modul yang ingin Anda pelajari atau uji secara interaktif. Modul bertanda bintang (Lab) memiliki skenario interaktif khusus.
+              Welcome to the practical simulator for "AI-Driven Digital Marketing Certification 1.4".
+              Choose the module you want to learn or test interactively. Modules marked with "Lab" have special interactive scenarios.
             </p>
           </div>
 
@@ -198,14 +248,14 @@ export default function App() {
                             copyEmbedLink(mod.id);
                           }}
                           className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          title="Salin Link Embed"
+                          title="Copy Embed Link"
                         >
                           {copiedId === mod.id ? (
-                            <span className="text-green-600 font-semibold">Tersalin!</span>
+                            <span className="text-green-600 font-semibold">Copied!</span>
                           ) : (
                             <>
                               <Link className="w-3.5 h-3.5" />
-                              <span>Salin Link</span>
+                              <span>Copy Link</span>
                             </>
                           )}
                         </button>
@@ -302,7 +352,7 @@ export default function App() {
               </div>
               <div className="px-5 py-4 rounded-2xl rounded-tl-none bg-slate-100 border border-slate-200 text-slate-800 shadow-sm flex items-center gap-2 max-w-lg">
                 <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                <span className="text-sm font-medium text-slate-500">Mentor sedang mengetik...</span>
+                <span className="text-sm font-medium text-slate-500">Mentor is typing...</span>
               </div>
             </motion.div>
           )}
@@ -318,7 +368,7 @@ export default function App() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ketik jawaban atau analisis Anda di sini..."
+              placeholder="Type your answer or analysis here..."
               disabled={isLoading}
               className="w-full h-12 bg-white border border-slate-300 rounded-xl px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm disabled:opacity-50"
             />
@@ -330,13 +380,110 @@ export default function App() {
               <Send className="w-4 h-4" />
             </button>
           </form>
-          <div className="flex gap-4 mt-2">
-            <span className="text-[10px] text-slate-500 font-medium">Socratic Mode Enabled</span>
-            <span className="text-[10px] text-slate-500 font-medium">•</span>
-            <span className="text-[10px] text-slate-500 font-medium">Lab Module Live</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+            <div className="flex gap-4">
+              <span className="text-[10px] text-slate-500 font-medium">Socratic Mode Enabled</span>
+              <span className="text-[10px] text-slate-500 font-medium">•</span>
+              <span className="text-[10px] text-slate-500 font-medium">Lab Module Live</span>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleAnalyze('summary')}
+                disabled={messages.length === 0 || isLoading}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 disabled:opacity-40 disabled:hover:bg-blue-50 text-[10px] font-bold text-blue-700 transition-all cursor-pointer focus:outline-none"
+                title="Summarize active chat session"
+              >
+                <FileText className="w-3 h-3" />
+                <span>Summary</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => handleAnalyze('mindmap')}
+                disabled={messages.length === 0 || isLoading}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-violet-50 hover:bg-violet-100 disabled:opacity-40 disabled:hover:bg-violet-50 text-[10px] font-bold text-violet-700 transition-all cursor-pointer focus:outline-none"
+                title="Generate concept mindmap"
+              >
+                <Brain className="w-3 h-3" />
+                <span>Mindmap</span>
+              </button>
+            </div>
           </div>
         </div>
       </footer>
+
+      {/* Analysis and Mindmap Modals */}
+      <AnimatePresence>
+        {isAnalyzing && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+          >
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center gap-4 text-center">
+              <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg">Analyzing Learning...</h3>
+                <p className="text-slate-500 text-sm mt-1">The mentor is processing your active session chat history.</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {modalContent && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-100"
+            >
+              <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
+                <div className="flex items-center gap-2">
+                  {modalContent.type === 'summary' ? (
+                    <FileText className="w-5 h-5 text-blue-600" />
+                  ) : (
+                    <Brain className="w-5 h-5 text-blue-600" />
+                  )}
+                  <h3 className="font-bold text-slate-800 text-base md:text-lg">
+                    {modalContent.type === 'summary' ? 'Session Learning Summary' : 'Session Concept Mindmap'}
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => setModalContent(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500 transition-colors focus:outline-none cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto flex-1 text-sm md:text-base leading-relaxed text-slate-700">
+                <div className="prose prose-slate max-w-none prose-sm sm:prose-base markdown-body">
+                  <ReactMarkdown>{modalContent.text}</ReactMarkdown>
+                </div>
+              </div>
+              
+              <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">
+                <button
+                  onClick={() => setModalContent(null)}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  Close View
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
