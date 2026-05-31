@@ -206,8 +206,18 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, {
+      maxAge: '1y',
+      immutable: true,
+      index: false
+    }));
+
     app.get('*', (req, res) => {
+      // Return 404 for missing assets rather than index.html
+      if (req.path.startsWith('/assets/') || req.path.includes('.')) {
+        return res.status(404).send('Asset not found');
+      }
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
