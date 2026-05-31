@@ -2,6 +2,13 @@
 
 An interactive e-learning companion and simulator built for the **AI-Driven Digital Marketing Certification 1.4** program. This app serves as both a Virtual Mentor and a Socratic Lab Simulator, guiding students dynamically, validating strategies, and conducting hands-on marketing lab scenarios.
 
+## 🎓 Certification & Corporate Hub
+
+* **Take the Course & Get Certified:** You can enroll in the full certification program and access the e-learning portal at [lensetek.online](https://lensetek.online).
+* **Explore Our Innovations:** Discover advanced AI implementations, marketing automation tools, and corporate digital solutions at [lensetek.com](https://lensetek.com).
+
+---
+
 Powered by the official **OpenAI Agents SDK**, featuring custom deep linking, session summarizing, and concept mindmap generation.
 
 ---
