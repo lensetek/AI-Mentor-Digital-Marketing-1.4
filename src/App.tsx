@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Send, Bot, User, ChevronLeft, Loader2, Sparkles, BookOpen } from 'lucide-react';
+import { Send, Bot, User, ChevronLeft, Loader2, Sparkles, BookOpen, Link } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChatMessage } from './types';
 import { MODULES, ModuleInfo } from './data';
@@ -20,6 +20,7 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -29,6 +30,28 @@ export default function App() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isLoading]);
+
+  // Check for deep link on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const modId = params.get('module') || params.get('m');
+    if (modId) {
+      const foundModule = MODULES.find(m => m.id.toLowerCase() === modId.toLowerCase());
+      if (foundModule) {
+        startModule(foundModule);
+      }
+    }
+  }, []);
+
+  const copyEmbedLink = (modId: string) => {
+    const embedUrl = `${window.location.origin}${window.location.pathname}?module=${modId}`;
+    navigator.clipboard.writeText(embedUrl).then(() => {
+      setCopiedId(modId);
+      setTimeout(() => setCopiedId(null), 2000);
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+    });
+  };
 
   const startModule = async (mod: ModuleInfo) => {
     setSelectedModule(mod);
@@ -112,8 +135,8 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
         <header className="bg-white border-b border-slate-200 py-4 px-6 sticky top-0 z-10 flex items-center gap-3">
-           <div className="bg-blue-600 p-2 rounded-lg shadow-sm">
-             <Bot className="w-5 h-5 text-white" />
+           <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center shrink-0 border border-slate-100 shadow-sm">
+             <img src="https://lensetek.com/favicon.png" alt="Lensetek Logo" className="w-7 h-7 object-contain" />
            </div>
            <div>
              <h1 className="font-semibold text-xs tracking-wider text-slate-700 uppercase leading-tight">Lensetek AI Mentor</h1>
@@ -136,33 +159,58 @@ export default function App() {
                 <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4 uppercase tracking-wider">{category}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {MODULES.filter(m => m.category === category).map((mod, index) => (
-                    <button
+                    <div
                       key={mod.id}
-                      onClick={() => startModule(mod)}
                       className={cn(
-                        "text-left bg-white border rounded-lg p-4 transition-all group flex flex-col gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1",
-                        mod.isLab ? "border-blue-200 shadow-sm hover:border-blue-500 hover:shadow-md" : "border-slate-200 hover:border-slate-400"
+                        "bg-white border rounded-lg p-4 transition-all group flex flex-col justify-between gap-3 relative hover:shadow-sm focus-within:ring-2 focus-within:ring-blue-500",
+                        mod.isLab ? "border-blue-200 hover:border-blue-500" : "border-slate-200 hover:border-slate-400"
                       )}
                     >
-                      <div className="flex justify-between items-start">
-                        <span className={cn(
-                          "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono tracking-wide",
-                          mod.isLab ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"
-                        )}>
-                          <BookOpen className="w-3 h-3" />
-                          {mod.id.toUpperCase()}
-                        </span>
-                        {mod.isLab && (
-                          <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase tracking-wider">Lab</span>
-                        )}
+                      <div 
+                        onClick={() => startModule(mod)}
+                        className="cursor-pointer flex-1 flex flex-col gap-2"
+                      >
+                        <div className="flex justify-between items-start">
+                          <span className={cn(
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono tracking-wide",
+                            mod.isLab ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"
+                          )}>
+                            <BookOpen className="w-3 h-3" />
+                            {mod.id.toUpperCase()}
+                          </span>
+                          {mod.isLab && (
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase tracking-wider">Lab</span>
+                          )}
+                        </div>
+                        <div>
+                          <h4 className={cn(
+                            "font-semibold text-sm mb-1 leading-tight transition-colors line-clamp-2",
+                            mod.isLab ? "text-blue-900 group-hover:text-blue-600" : "text-slate-700 group-hover:text-slate-900"
+                          )}>{mod.title}</h4>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className={cn(
-                          "font-semibold text-sm mb-1 leading-tight transition-colors line-clamp-2",
-                          mod.isLab ? "text-blue-900 group-hover:text-blue-600" : "text-slate-700 group-hover:text-slate-900"
-                        )}>{mod.title}</h4>
+                      
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400">Embed & Share</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyEmbedLink(mod.id);
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          title="Salin Link Embed"
+                        >
+                          {copiedId === mod.id ? (
+                            <span className="text-green-600 font-semibold">Tersalin!</span>
+                          ) : (
+                            <>
+                              <Link className="w-3.5 h-3.5" />
+                              <span>Salin Link</span>
+                            </>
+                          )}
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -178,7 +226,11 @@ export default function App() {
       <header className="bg-white border-b border-slate-200 py-3 px-4 sm:px-6 sticky top-0 z-10 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => setSelectedModule(null)}
+            onClick={() => {
+              setSelectedModule(null);
+              setMessages([]);
+              window.history.pushState({}, '', window.location.pathname);
+            }}
             className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-500 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Kembali ke daftar modul"
           >
@@ -212,12 +264,12 @@ export default function App() {
                 )}
               >
                 <div className={cn(
-                  "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                  "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden",
                   msg.role === 'user' 
                     ? "bg-slate-200 text-slate-800 font-bold text-xs" 
-                    : "bg-blue-600 shadow-lg text-white"
+                    : "bg-white border border-slate-100 shadow-sm"
                 )}>
-                  {msg.role === 'user' ? "AD" : <Bot className="w-5 h-5" />}
+                  {msg.role === 'user' ? "AD" : <img src="https://lensetek.com/favicon.png" alt="Lensetek Logo" className="w-8 h-8 object-contain" />}
                 </div>
                 
                 <div className={cn(
@@ -245,8 +297,8 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               className="flex gap-4 max-w-[85%] mr-auto"
             >
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-blue-600 text-white shadow-lg">
-                <Bot className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-white border border-slate-100 shadow-sm overflow-hidden">
+                <img src="https://lensetek.com/favicon.png" alt="Lensetek Logo" className="w-8 h-8 object-contain" />
               </div>
               <div className="px-5 py-4 rounded-2xl rounded-tl-none bg-slate-100 border border-slate-200 text-slate-800 shadow-sm flex items-center gap-2 max-w-lg">
                 <Loader2 className="w-4 h-4 animate-spin text-blue-600" />

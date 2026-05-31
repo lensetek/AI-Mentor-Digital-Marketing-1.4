@@ -1,22 +1,23 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
+import { Agent, run, user, assistant, setDefaultOpenAIKey } from "@openai/agents";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config({ path: ".env.local" });
+dotenv.config();
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 
-// Initialize Gemini API client
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
+// Initialize OpenAI API client
+const apiKey = process.env.OPENAI_API || process.env.OPENAI_API_KEY;
+if (apiKey) {
+  setDefaultOpenAIKey(apiKey);
+}
 
 // Ensure SYSTEM_INSTRUCTION matches the requirements
 const SYSTEM_INSTRUCTION = `
@@ -62,34 +63,41 @@ Jika modul yang dimasuki tidak memiliki instruksi Lab khusus, cukup sapa penggun
 - Jika pengguna masuk dengan mengetik [CURRENT_MODULE: id_modul], Anda wajib merespons dengan format:
   "Halo! Selamat datang di sesi Virtual Mentor untuk [ID/Nama Modul]. Di bab ini, kita akan mempelajari topik ini. Yuk, kita mulai! [Berikan 1 pertanyaan pemantik sesuai materi]."
 - Jangan pernah keluar dari identitas sebagai Lensetek AI Mentor.
-- Selalu dorong peserta untuk mencoba fitur simulasi di bagian mode Virtual Lab yang relevan.
 `;
+
+const modelName = process.env.OPENAI_MODEL || "gpt-4.1-nano";
+
+const mentorAgent = new Agent({
+  name: "Lensetek AI Mentor",
+  instructions: SYSTEM_INSTRUCTION,
+  model: modelName,
+});
 
 app.post("/api/chat", async (req, res) => {
   try {
     const { history, message } = req.body;
     
     // Check API Key
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "GEMINI_API_KEY is not configured" });
+    const activeKey = process.env.OPENAI_API || process.env.OPENAI_API_KEY;
+    if (!activeKey) {
+      return res.status(500).json({ error: "OPENAI_API key is not configured" });
     }
 
-    const contents = history.map((msg: any) => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }],
-    }));
-    contents.push({ role: 'user', parts: [{ text: message }] });
+    const inputs = [];
+    if (history && Array.isArray(history)) {
+      for (const msg of history) {
+        if (msg.role === 'user') {
+          inputs.push(user(msg.text));
+        } else {
+          inputs.push(assistant(msg.text));
+        }
+      }
+    }
+    inputs.push(user(message));
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: contents,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.7,
-      },
-    });
+    const result = await run(mentorAgent, inputs);
 
-    res.json({ text: response.text });
+    res.json({ text: result.finalOutput || "" });
   } catch (error: any) {
     console.error("Chat error:", error);
     res.status(500).json({ error: error.message || "An error occurred" });
