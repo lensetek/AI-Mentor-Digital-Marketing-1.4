@@ -151,20 +151,36 @@ app.post("/api/analyze", checkAccess, async (req, res) => {
     if (type === "summary") {
       prompt = `Here is the conversation history between the Student and the AI Mentor in the e-learning session:\n\n${conversationText}\n\nProvide a highly structured, concise, and neat summary in English of the digital marketing concepts discussed, the draft strategy analyzed, the mentor's feedback, and key takeaways. Use emojis for readability.`;
     } else if (type === "mindmap") {
-      prompt = `Here is the conversation history between the Student and the AI Mentor in the e-learning session:\n\n${conversationText}\n\nCreate a visual Concept Mindmap based on the topics discussed in the form of a beautiful, structured markdown list with emojis. Use clean markdown indentation (e.g., - 🌀 Main Topic, followed by -- 🔑 Sub-concept, etc.) to depict clear and appealing branch relationships.`;
+      prompt = `Here is the conversation history between the Student and the AI Mentor in the e-learning session:\n\n${conversationText}\n\nCreate a visual Concept Mindmap based on the topics discussed. You MUST output a single, valid JSON object matching the following structure, with NO markdown code block formatting (do not wrap in \`\`\`json), NO markdown wrapping, and NO explanation text. Just the raw JSON.
+
+TypeScript Schema:
+interface MindmapNode {
+  name: string; // The concept or topic name (concise, keep under 4 words)
+  emoji: string; // Single emoji representing the concept
+  description: string; // Brief 1-sentence explanation or key takeaway
+  children?: MindmapNode[]; // Sub-concepts (max 3-4 children per node)
+}
+
+Create a hierarchical concept tree with the main subject of the module as the root node.`;
     } else {
       return res.status(400).json({ error: "Invalid analysis type" });
     }
 
     const analysisAgent = new Agent({
       name: "Lensetek Analyzer",
-      instructions: "You are a digital marketing learning analysis assistant whose task is to help summarize concepts and create informative, engaging, and easy-to-understand structured mindmap lists.",
+      instructions: "You are a digital marketing learning analysis assistant whose task is to help summarize concepts and create structured, beautiful mindmap trees in raw JSON format.",
       model: modelName,
     });
 
     const result = await run(analysisAgent, [user(prompt)]);
+    
+    let outputText = result.finalOutput || "";
+    if (type === "mindmap") {
+      // Strip markdown code block wrappers if any are present
+      outputText = outputText.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+    }
 
-    res.json({ text: result.finalOutput || "" });
+    res.json({ text: outputText });
   } catch (error: any) {
     console.error("Analysis error:", error);
     res.status(500).json({ error: error.message || "An error occurred" });

@@ -116,7 +116,60 @@ export default function App() {
   const [modalContent, setModalContent] = useState<{ type: 'summary' | 'mindmap', text: string } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [gateCode, setGateCode] = useState<string>('');
+  const [chatCount, setChatCount] = useState<number>(0);
+  const [limitResetTime, setLimitResetTime] = useState<number | null>(null);
+  const [timeLeftMinutes, setTimeLeftMinutes] = useState<number>(60);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Sync rate limit stats from LocalStorage on mount
+  useEffect(() => {
+    const savedCount = localStorage.getItem('lsk_chat_count');
+    const savedTime = localStorage.getItem('lsk_chat_reset_time');
+    const now = Date.now();
+    
+    if (savedCount && savedTime) {
+      const resetTime = parseInt(savedTime, 10);
+      if (now > resetTime) {
+        const nextReset = now + 60 * 60 * 1000;
+        localStorage.setItem('lsk_chat_count', '0');
+        localStorage.setItem('lsk_chat_reset_time', nextReset.toString());
+        setChatCount(0);
+        setLimitResetTime(nextReset);
+        setTimeLeftMinutes(60);
+      } else {
+        setChatCount(parseInt(savedCount, 10));
+        setLimitResetTime(resetTime);
+        setTimeLeftMinutes(Math.ceil((resetTime - now) / 60000));
+      }
+    } else {
+      const targetReset = now + 60 * 60 * 1000;
+      localStorage.setItem('lsk_chat_count', '0');
+      localStorage.setItem('lsk_chat_reset_time', targetReset.toString());
+      setChatCount(0);
+      setLimitResetTime(targetReset);
+      setTimeLeftMinutes(60);
+    }
+  }, []);
+
+  // Countdown timer effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (limitResetTime) {
+        const diff = limitResetTime - Date.now();
+        if (diff <= 0) {
+          const nextReset = Date.now() + 60 * 60 * 1000;
+          localStorage.setItem('lsk_chat_count', '0');
+          localStorage.setItem('lsk_chat_reset_time', nextReset.toString());
+          setChatCount(0);
+          setLimitResetTime(nextReset);
+          setTimeLeftMinutes(60);
+        } else {
+          setTimeLeftMinutes(Math.ceil(diff / 60000));
+        }
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [limitResetTime]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -235,6 +288,26 @@ export default function App() {
     e?.preventDefault();
     
     if (!inputValue.trim() || isLoading) return;
+
+    // Check hourly limit before processing
+    const now = Date.now();
+    let currentCount = chatCount;
+    let currentReset = limitResetTime;
+
+    if (currentReset && now > currentReset) {
+      currentCount = 0;
+      currentReset = now + 60 * 60 * 1000;
+      localStorage.setItem('lsk_chat_count', '0');
+      localStorage.setItem('lsk_chat_reset_time', currentReset.toString());
+      setChatCount(0);
+      setLimitResetTime(currentReset);
+      setTimeLeftMinutes(60);
+    }
+
+    if (currentCount >= 10) {
+      alert(`Hourly quota reached! You have used your limit of 10 chats. Quota resets in ${timeLeftMinutes} minutes.`);
+      return;
+    }
     
     const userMsg: ChatMessage = { id: generateId(), role: 'user', text: inputValue };
     const currentHistory = [...messages];
@@ -267,6 +340,11 @@ export default function App() {
       }
 
       setMessages(prev => [...prev, { id: generateId(), role: 'assistant', text: data.text }]);
+      
+      // Increment and update limit counts upon successful answer
+      const newCount = currentCount + 1;
+      localStorage.setItem('lsk_chat_count', newCount.toString());
+      setChatCount(newCount);
     } catch (error: any) {
       setMessages(prev => [...prev, { id: generateId(), role: 'assistant', text: `**Error:** ${error.message}` }]);
     } finally {
@@ -372,7 +450,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="h-screen bg-slate-50 flex flex-col font-sans overflow-hidden">
       <header className="bg-white border-b border-slate-200 py-3 px-4 sm:px-6 sticky top-0 z-10 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <button 
@@ -399,8 +477,8 @@ export default function App() {
           <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs border border-blue-200">AD</div>
         </div>
       </header>
-
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-32 scroll-smooth">
+ 
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-8 scroll-smooth">
         <div className="max-w-3xl mx-auto flex flex-col gap-6">
           <AnimatePresence initial={false}>
             {messages.map((msg) => (
@@ -429,7 +507,7 @@ export default function App() {
                     : "bg-slate-100 border border-slate-200 text-slate-800 rounded-tl-none"
                 )}>
                   <div className={cn(
-                    "prose prose-sm sm:prose-base max-w-none break-words",
+                     "prose prose-sm sm:prose-base max-w-none break-words",
                     msg.role === 'user' ? "prose-invert" : "prose-slate"
                   )}>
                     <div className="markdown-body">
@@ -440,7 +518,7 @@ export default function App() {
               </motion.div>
             ))}
           </AnimatePresence>
-
+ 
           {isLoading && (
             <motion.div 
               initial={{ opacity: 0, y: 10 }}
@@ -459,8 +537,8 @@ export default function App() {
           <div ref={messagesEndRef} />
         </div>
       </main>
-
-      <footer className="bg-white border-t border-slate-200 p-4 shrink-0 fixed bottom-0 w-full lg:static">
+ 
+      <footer className="bg-white border-t border-slate-200 p-4 shrink-0 w-full z-10">
         <div className="max-w-3xl mx-auto">
           <form onSubmit={sendMessage} className="relative flex items-center">
             <input
@@ -468,13 +546,16 @@ export default function App() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type your answer or analysis here..."
-              disabled={isLoading}
+              placeholder={chatCount >= 10 
+                ? `Hourly limit reached! Quota resets in ${timeLeftMinutes} minutes.` 
+                : "Type your answer or analysis here..."
+              }
+              disabled={isLoading || chatCount >= 10}
               className="w-full h-12 bg-white border border-slate-300 rounded-xl px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm disabled:opacity-50"
             />
             <button
               type="submit"
-              disabled={!inputValue.trim() || isLoading}
+              disabled={!inputValue.trim() || isLoading || chatCount >= 10}
               className="absolute right-2 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-md disabled:opacity-50 disabled:hover:bg-blue-600 hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <Send className="w-4 h-4" />
