@@ -15,6 +15,98 @@ function generateId() {
   return Math.random().toString(36).substring(2, 9);
 }
 
+interface MindmapNode {
+  name: string;
+  emoji?: string;
+  description?: string;
+  children?: MindmapNode[];
+}
+
+const MindmapNodeComponent: React.FC<{ 
+  node: MindmapNode; 
+  depth: number; 
+  isLast: boolean; 
+  isFirst: boolean; 
+  parentHasMultiple: boolean;
+}> = ({ node, depth, isLast, isFirst, parentHasMultiple }) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const hasChildren = node.children && node.children.length > 0;
+
+  return (
+    <div className="flex flex-col items-center relative px-2">
+      {/* Top connector line from parent to this node */}
+      {depth > 0 && (
+        <div className="absolute top-0 w-0.5 h-6 bg-slate-300"></div>
+      )}
+      
+      {/* Horizontal connector line on this row if parent has multiple children */}
+      {depth > 0 && parentHasMultiple && (
+        <div 
+          className={cn(
+            "absolute top-0 h-0.5 bg-slate-300",
+            isFirst ? "left-1/2 right-0" :
+            isLast ? "left-0 right-1/2" :
+            "left-0 right-0"
+          )}
+        ></div>
+      )}
+
+      {/* Node Card */}
+      <div 
+        className={cn(
+          "px-4 py-3 rounded-2xl shadow-sm border text-center transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-md flex flex-col items-center min-w-[140px] max-w-[180px] z-10 select-none",
+          depth === 0 ? "bg-gradient-to-br from-blue-600 to-indigo-700 border-blue-500 text-white ring-4 ring-blue-100" :
+          depth === 1 ? "bg-gradient-to-br from-indigo-50 to-indigo-100/50 border-indigo-200 text-indigo-950 font-semibold" :
+          "bg-white border-slate-200 text-slate-800"
+        )}
+        style={{ marginTop: depth > 0 ? '24px' : '0' }}
+      >
+        <span className="text-2xl mb-1.5 transform transition-transform hover:scale-125 duration-200">{node.emoji || '💡'}</span>
+        <h4 className="font-bold text-xs leading-tight tracking-tight">{node.name}</h4>
+        {node.description && (
+          <p className={cn("text-[9px] mt-1 leading-snug font-medium", depth === 0 ? "text-blue-100" : "text-slate-500")}>
+            {node.description}
+          </p>
+        )}
+        {hasChildren && (
+          <button 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className={cn(
+              "mt-2 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm cursor-pointer transition-colors border",
+              depth === 0 
+                ? "bg-white text-blue-600 border-slate-200 hover:bg-slate-50" 
+                : "bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-700"
+            )}
+          >
+            {isCollapsed ? '+' : '-'}
+          </button>
+        )}
+      </div>
+
+      {/* Bottom connector line from this node to its children */}
+      {hasChildren && !isCollapsed && (
+        <div className="w-0.5 h-6 bg-slate-300"></div>
+      )}
+
+      {/* Children branches */}
+      {hasChildren && !isCollapsed && (
+        <div className="flex pt-0 relative justify-center">
+          {node.children!.map((child, idx) => (
+            <MindmapNodeComponent 
+              key={idx} 
+              node={child} 
+              depth={depth + 1} 
+              isFirst={idx === 0}
+              isLast={idx === node.children!.length - 1}
+              parentHasMultiple={node.children!.length > 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   const [selectedModule, setSelectedModule] = useState<ModuleInfo | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -466,10 +558,37 @@ export default function App() {
                 </button>
               </div>
               
-              <div className="p-6 overflow-y-auto flex-1 text-sm md:text-base leading-relaxed text-slate-700">
-                <div className="prose prose-slate max-w-none prose-sm sm:prose-base markdown-body">
-                  <ReactMarkdown>{modalContent.text}</ReactMarkdown>
-                </div>
+              <div className="p-6 overflow-auto flex-1 text-sm md:text-base leading-relaxed text-slate-700 flex justify-center items-start min-h-[400px] bg-slate-50/50">
+                {modalContent.type === 'summary' ? (
+                  <div className="prose prose-slate max-w-none prose-sm sm:prose-base markdown-body w-full">
+                    <ReactMarkdown>{modalContent.text}</ReactMarkdown>
+                  </div>
+                ) : (
+                  (() => {
+                    let parsedMindmap = null;
+                    try {
+                      parsedMindmap = JSON.parse(modalContent.text);
+                    } catch (e) {
+                      console.error("Failed to parse mindmap JSON: ", e);
+                    }
+                    
+                    return parsedMindmap ? (
+                      <div className="w-full flex justify-center items-start overflow-x-auto py-4 min-w-[600px] scrollbar-thin">
+                        <MindmapNodeComponent 
+                          node={parsedMindmap} 
+                          depth={0} 
+                          isFirst={true} 
+                          isLast={true} 
+                          parentHasMultiple={false} 
+                        />
+                      </div>
+                    ) : (
+                      <div className="prose prose-slate max-w-none prose-sm sm:prose-base markdown-body w-full">
+                        <ReactMarkdown>{modalContent.text}</ReactMarkdown>
+                      </div>
+                    );
+                  })()
+                )}
               </div>
               
               <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">

@@ -88,18 +88,35 @@ Powered by the official **OpenAI Agents SDK**, featuring custom deep linking, se
 
 ## ☁️ Deployment
 
-### 1. Frontend (Static Hosting - e.g., Cloudflare Pages)
-Upload the compiled `dist/` directory to **Cloudflare Pages**. 
+### 1. Unified Single Deployment (Highly Recommended)
+You can deploy both the Frontend and Backend together as a **single project** on any Node.js hosting platform (such as **Render.com**, Railway, or Google Cloud Run). 
 
-To connect the frontend to your backend proxy, create a `_redirects` file in your `dist/` root or deploy folder containing:
-```text
-/api/*  https://your-backend-service.onrender.com/api/:splat  200
-```
+In production, the Express server automatically serves the compiled static React assets from the `dist/` folder, eliminating any CORS issues or redirect configurations!
 
-### 2. Backend (Node.js Server - e.g., Render.com)
-Deploy the repository as a **Web Service** on **Render.com**:
-- **Build Command**: `npm install && npm run build`
-- **Start Command**: `npm start`
-- **Environment Variables**:
-  - Configure `OPENAI_API` with your secret key.
-  - Configure `OPENAI_MODEL` with your chosen model name (e.g., `gpt-4o-mini`).
+#### Deploying on Render.com:
+1. Create a new **Web Service** on Render and connect this GitHub repository.
+2. Configure the following settings:
+   - **Language**: `Node`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+3. Under **Environment Variables**, add:
+   - `NODE_ENV`: `production` *(Ensures the Express server serves the frontend files)*
+   - `OPENAI_API`: `your-openai-api-key-here`
+   - `OPENAI_MODEL`: `gpt-4o-mini` *(or your preferred model)*
+4. Click **Create Web Service**. Once deployed, your entire application (Chat, Labs, Summaries, and Mindmaps) will be live under a single URL!
+
+---
+
+### 2. Split Deployment (Optional)
+If you prefer to separate the Frontend and Backend:
+
+#### Frontend (Static Hosting - e.g., Cloudflare Pages):
+- Upload the compiled `dist/` directory directly to Cloudflare Pages.
+- To connect to your external backend without CORS issues, create a `_redirects` file in the root of your `dist/` (or in a `public/` folder) containing:
+  ```text
+  /api/*  https://your-backend-service.onrender.com/api/:splat  200
+  ```
+
+#### Backend (Node.js Server):
+- Deploy this repository to Render.com with the same build settings but omit `NODE_ENV` or set it to a different value.
+- Make sure to enable CORS in your backend `server.ts` if calling it directly across different origins.
