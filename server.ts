@@ -172,9 +172,13 @@ Create a hierarchical concept tree with the main subject of the module as the ro
       return res.status(400).json({ error: "Invalid analysis type" });
     }
 
+    const agentInstructions = type === "summary"
+      ? "You are a digital marketing learning analysis assistant. Your task is to summarize digital marketing concepts in a highly structured, clean, and beautiful Markdown format with emojis."
+      : "You are a digital marketing learning analysis assistant. Your task is to create structured, beautiful mindmap trees in raw JSON format matching the requested schema.";
+
     const analysisAgent = new Agent({
       name: "Lensetek Analyzer",
-      instructions: "You are a digital marketing learning analysis assistant whose task is to help summarize concepts and create structured, beautiful mindmap trees in raw JSON format.",
+      instructions: agentInstructions,
       model: modelName,
     });
 

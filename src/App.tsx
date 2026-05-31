@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Send, Bot, User, ChevronLeft, Loader2, Sparkles, BookOpen, Link, FileText, Brain, X } from 'lucide-react';
+import { Send, Bot, User, ChevronLeft, Loader2, Sparkles, BookOpen, Link, FileText, Brain, X, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import html2canvas from 'html2canvas';
 import { ChatMessage } from './types';
 import { MODULES, ModuleInfo } from './data';
 import clsx from 'clsx';
@@ -107,6 +108,8 @@ const MindmapNodeComponent: React.FC<{
   );
 };
 
+const CHAT_LIMIT = parseInt(import.meta.env.VITE_CHAT_LIMIT || '10', 10);
+
 export default function App() {
   const [selectedModule, setSelectedModule] = useState<ModuleInfo | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -116,10 +119,21 @@ export default function App() {
   const [modalContent, setModalContent] = useState<{ type: 'summary' | 'mindmap', text: string } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [gateCode, setGateCode] = useState<string>('');
+  const [isDownloading, setIsDownloading] = useState(false);
   const [chatCount, setChatCount] = useState<number>(0);
   const [limitResetTime, setLimitResetTime] = useState<number | null>(null);
   const [timeLeftMinutes, setTimeLeftMinutes] = useState<number>(60);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus input when loading completes or module is changed
+  useEffect(() => {
+    if (!isLoading && selectedModule && chatCount < CHAT_LIMIT) {
+      setTimeout(() => {
+        chatInputRef.current?.focus();
+      }, 50);
+    }
+  }, [isLoading, selectedModule, chatCount]);
 
   // Sync rate limit stats from LocalStorage on mount
   useEffect(() => {
@@ -205,7 +219,37 @@ export default function App() {
     });
   };
 
+  const downloadAsImage = () => {
+    const targetId = modalContent?.type === 'summary' ? 'summary-capture-target' : 'mindmap-capture-target';
+    const element = document.getElementById(targetId);
+    if (!element) return;
+
+    setIsDownloading(true);
+    setTimeout(() => {
+      html2canvas(element, {
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        scale: 2,
+        logging: false,
+      }).then((canvas) => {
+        const link = document.createElement('a');
+        link.download = `${selectedModule?.id || 'lensetek'}-${modalContent?.type || 'learning'}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      }).catch((err) => {
+        console.error('Failed to export image: ', err);
+        alert('Failed to download as image. Please try again.');
+      }).finally(() => {
+        setIsDownloading(false);
+      });
+    }, 100);
+  };
+
   const handleAnalyze = async (type: 'summary' | 'mindmap') => {
+    if (chatCount >= CHAT_LIMIT) {
+      alert(`Hourly quota reached! You cannot request a summary or mindmap. Quota resets in ${timeLeftMinutes} minutes.`);
+      return;
+    }
     if (messages.length === 0) {
       alert("No chat history to analyze. Please start a conversation with the mentor first!");
       return;
@@ -304,8 +348,8 @@ export default function App() {
       setTimeLeftMinutes(60);
     }
 
-    if (currentCount >= 10) {
-      alert(`Hourly quota reached! You have used your limit of 10 chats. Quota resets in ${timeLeftMinutes} minutes.`);
+    if (currentCount >= CHAT_LIMIT) {
+      alert(`Hourly quota reached! You have used your limit of ${CHAT_LIMIT} chats. Quota resets in ${timeLeftMinutes} minutes.`);
       return;
     }
     
@@ -540,22 +584,32 @@ export default function App() {
  
       <footer className="bg-white border-t border-slate-200 p-4 shrink-0 w-full z-10">
         <div className="max-w-3xl mx-auto">
+          {chatCount >= CHAT_LIMIT && (
+            <div className="mb-3 p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-red-800 font-semibold animate-pulse shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 bg-red-500 rounded-full"></div>
+                <span>Hourly chat quota reached ({chatCount}/{CHAT_LIMIT}). Resets in {timeLeftMinutes} minutes.</span>
+              </div>
+              <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Locked</span>
+            </div>
+          )}
           <form onSubmit={sendMessage} className="relative flex items-center">
             <input
+              ref={chatInputRef}
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={chatCount >= 10 
+              placeholder={chatCount >= CHAT_LIMIT 
                 ? `Hourly limit reached! Quota resets in ${timeLeftMinutes} minutes.` 
                 : "Type your answer or analysis here..."
               }
-              disabled={isLoading || chatCount >= 10}
+              disabled={isLoading || chatCount >= CHAT_LIMIT}
               className="w-full h-12 bg-white border border-slate-300 rounded-xl px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm disabled:opacity-50"
             />
             <button
               type="submit"
-              disabled={!inputValue.trim() || isLoading || chatCount >= 10}
+              disabled={!inputValue.trim() || isLoading || chatCount >= CHAT_LIMIT}
               className="absolute right-2 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-md disabled:opacity-50 disabled:hover:bg-blue-600 hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <Send className="w-4 h-4" />
@@ -572,7 +626,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleAnalyze('summary')}
-                disabled={messages.length === 0 || isLoading}
+                disabled={messages.length === 0 || isLoading || chatCount >= CHAT_LIMIT}
                 className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 disabled:opacity-40 disabled:hover:bg-blue-50 text-[10px] font-bold text-blue-700 transition-all cursor-pointer focus:outline-none"
                 title="Summarize active chat session"
               >
@@ -583,7 +637,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleAnalyze('mindmap')}
-                disabled={messages.length === 0 || isLoading}
+                disabled={messages.length === 0 || isLoading || chatCount >= CHAT_LIMIT}
                 className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-violet-50 hover:bg-violet-100 disabled:opacity-40 disabled:hover:bg-violet-50 text-[10px] font-bold text-violet-700 transition-all cursor-pointer focus:outline-none"
                 title="Generate concept mindmap"
               >
@@ -625,7 +679,10 @@ export default function App() {
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-100"
+              className={cn(
+                "bg-white rounded-2xl shadow-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-100 transition-all duration-300",
+                modalContent.type === 'summary' ? "max-w-2xl" : "max-w-4xl"
+              )}
             >
               <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
                 <div className="flex items-center gap-2">
@@ -647,9 +704,9 @@ export default function App() {
                 </button>
               </div>
               
-              <div className="p-6 overflow-auto flex-1 text-sm md:text-base leading-relaxed text-slate-700 flex justify-center items-start min-h-[400px] bg-slate-50/50">
+              <div className="p-6 overflow-auto flex-1 text-sm md:text-base leading-relaxed text-slate-700 min-h-[400px] bg-slate-50/50 flex flex-col items-stretch">
                 {modalContent.type === 'summary' ? (
-                  <div className="prose prose-slate max-w-none prose-sm sm:prose-base markdown-body w-full">
+                  <div id="summary-capture-target" className="prose prose-slate max-w-none prose-sm sm:prose-base markdown-body w-full bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
                     <ReactMarkdown>{modalContent.text}</ReactMarkdown>
                   </div>
                 ) : (
@@ -662,17 +719,19 @@ export default function App() {
                     }
                     
                     return parsedMindmap ? (
-                      <div className="w-full flex justify-center items-start overflow-x-auto py-4 min-w-[600px] scrollbar-thin">
-                        <MindmapNodeComponent 
-                          node={parsedMindmap} 
-                          depth={0} 
-                          isFirst={true} 
-                          isLast={true} 
-                          parentHasMultiple={false} 
-                        />
+                      <div className="w-full overflow-x-auto py-4 scrollbar-thin">
+                        <div id="mindmap-capture-target" className="flex justify-start lg:justify-center items-start min-w-[700px] p-6 bg-white rounded-xl border border-slate-100 shadow-sm mx-auto">
+                          <MindmapNodeComponent 
+                            node={parsedMindmap} 
+                            depth={0} 
+                            isFirst={true} 
+                            isLast={true} 
+                            parentHasMultiple={false} 
+                          />
+                        </div>
                       </div>
                     ) : (
-                      <div className="prose prose-slate max-w-none prose-sm sm:prose-base markdown-body w-full">
+                      <div id="mindmap-capture-target" className="prose prose-slate max-w-none prose-sm sm:prose-base markdown-body w-full bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
                         <ReactMarkdown>{modalContent.text}</ReactMarkdown>
                       </div>
                     );
@@ -680,10 +739,27 @@ export default function App() {
                 )}
               </div>
               
-              <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">
+              <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
+                <button
+                  onClick={downloadAsImage}
+                  disabled={isDownloading}
+                  className="inline-flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-semibold text-sm transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  {isDownloading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Downloading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Download as Image</span>
+                    </>
+                  )}
+                </button>
                 <button
                   onClick={() => setModalContent(null)}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-semibold text-sm transition-all focus:outline-none focus:ring-2 focus:ring-slate-400 cursor-pointer"
                 >
                   Close View
                 </button>
