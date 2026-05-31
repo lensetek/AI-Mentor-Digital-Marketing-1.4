@@ -4,7 +4,7 @@ An interactive e-learning companion and simulator built for the **AI-Driven Digi
 
 ## 🎓 Certification & Corporate Hub
 
-* **Take the Course & Get Certified:** You can enroll in the full certification program and access the e-learning portal at [lensetek.online](https://lensetek.online).
+* **Take the Course & Get Certified:** You can enroll in the full certification program and access the e-learning portal at [lensetek.com/digima](https://lensetek.com/digima).
 * **Explore Our Innovations:** Discover advanced AI implementations, marketing automation tools, and corporate digital solutions at [lensetek.com](https://lensetek.com).
 
 ---
